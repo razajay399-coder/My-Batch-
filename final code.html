@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RWA Style Final</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <style>
+        :root { --rwa-purple: #6A5AE0; --bg-dark: #121221; --card-dark: #1E1E2F; }
+        body { background-color: #F4F7FE; font-family: 'Segoe UI', sans-serif; margin: 0; padding-bottom: 80px; }
+
+        /* Header & Search */
+        .app-nav { background: var(--rwa-purple); color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        .search-area { padding: 15px; background: white; }
+        .search-input { background: #F0F2F5; border: 1px solid #ddd; border-radius: 8px; padding: 10px; width: 100%; outline: none; }
+
+        /* Course Card */
+        .course-card { background: white; border-radius: 15px; margin: 15px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .btn-study { background: var(--rwa-purple); color: white; width: 100%; border: none; border-radius: 10px; padding: 12px; font-weight: bold; }
+
+        /* Lecture Page Style */
+        #lecturePage { display: none; background: var(--bg-dark); min-height: 100vh; color: white; }
+        .tab-row { display: flex; justify-content: space-around; padding: 12px 0; border-bottom: 1px solid #333; }
+        .tab-item { color: #888; font-size: 13px; font-weight: 600; cursor: pointer; padding-bottom: 5px; }
+        .tab-item.active { color: var(--rwa-purple); border-bottom: 3px solid var(--rwa-purple); }
+
+        /* List Items (Video/Notes) */
+        .item-card { background: var(--card-dark); margin: 12px; border-radius: 12px; display: flex; padding: 10px; gap: 12px; border: 1px solid #333; align-items: center; }
+        .thumb-box { width: 110px; height: 65px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #2A2A3C; display: flex; align-items: center; justify-content: center; }
+        
+        /* Video Player */
+        #videoPlayerPage { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10000; }
+        .video-full { width: 100%; height: 100%; object-fit: fill !important; }
+
+        /* Bottom Nav */
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <div id="mainNav" class="app-nav">
+        <div><i class="fas fa-bars me-2"></i> <b>Rojgar With Ankit</b></div>
+        <i class="fab fa-youtube text-danger"></i>
+    </div>
+
+    <div id="homePage">
+        <div class="search-area"><input type="text" class="search-input" placeholder="🔍 Search Course..."></div>
+        <div id="batchList"></div>
+    </div>
+
+    <div id="subjectPage" style="display:none; background:var(--bg-dark); min-height:100vh; color:white; padding:15px;">
+        <div onclick="showPage('homePage')" class="mb-3"><i class="fas fa-arrow-left me-2"></i> Back</div>
+        <div id="subList"></div>
+    </div>
+
+    <div id="lecturePage">
+        <div class="p-3 d-flex align-items-center gap-3" onclick="showPage('subjectPage')">
+            <i class="fas fa-arrow-left"></i> <b id="lectureTitle">Content</b>
+        </div>
+        <div class="tab-row">
+            <div class="tab-item active" onclick="switchTab('video', this)">LECTURES</div>
+            <div class="tab-item" onclick="switchTab('note', this)">NOTES</div>
+            <div class="tab-item" onclick="switchTab('doubt', this)">DOUBT</div>
+        </div>
+        <div id="contentList" style="padding-bottom: 80px;"></div>
+    </div>
+
+    <div id="adminPage" style="display:none; padding:20px;">
+        <h5>Admin Panel</h5>
+        <select id="addType" class="form-select mb-2">
+            <option value="video">Lecture (Video)</option>
+            <option value="note">Notes (PDF/Link)</option>
+            <option value="doubt">Doubt Solve</option>
+        </select>
+        <input type="text" id="addBatch" class="form-control mb-2" placeholder="Batch Name">
+        <input type="text" id="addSub" class="form-control mb-2" placeholder="Subject">
+        <input type="text" id="addTitle" class="form-control mb-2" placeholder="Title">
+        <input type="text" id="addUrl" class="form-control mb-3" placeholder="URL / Video ID">
+        <button class="btn btn-primary w-100" onclick="publish()">PUBLISH</button>
+    </div>
+
+    <div id="videoPlayerPage">
+        <div style="position:absolute; top:20px; left:20px; z-index:11; color:white;" onclick="closeVideo()"><i class="fas fa-times fa-2x"></i></div>
+        <div id="playerArea" style="width:100%; height:100%;"></div>
+    </div>
+
+    <div class="bottom-nav" id="footer">
+        <div onclick="showPage('homePage')"><i class="fas fa-home d-block text-center"></i>Home</div>
+        <div onclick="showPage('adminPage')"><i class="fas fa-lock d-block text-center"></i>Admin</div>
+    </div>
+
+    <script>
+        let appData = JSON.parse(localStorage.getItem('rwa_pro_db')) || [];
+        let currentBatch = "", currentSub = "", currentTab = "video";
+
+        function showPage(id) {
+            document.querySelectorAll('#homePage, #subjectPage, #lecturePage, #adminPage, #videoPlayerPage').forEach(p => p.style.display = 'none');
+            document.getElementById(id).style.display = 'block';
+            document.getElementById('mainNav').style.display = (id === 'videoPlayerPage') ? 'none' : 'flex';
+            if(id === 'homePage') renderBatches();
+        }
+
+        function publish() {
+            const type = document.getElementById('addType').value;
+            const b = document.getElementById('addBatch').value;
+            const s = document.getElementById('addSub').value;
+            const t = document.getElementById('addTitle').value;
+            const u = document.getElementById('addUrl').value;
+            appData.push({ type, b, s, t, u });
+            localStorage.setItem('rwa_pro_db', JSON.stringify(appData));
+            alert("Published Successfully!");
+            showPage('homePage');
+        }
+
+        function renderBatches() {
+            const cont = document.getElementById('batchList');
+            cont.innerHTML = '';
+            [...new Set(appData.map(x => x.b))].forEach(b => {
+                cont.innerHTML += `<div class="course-card"><h6>${b}</h6><button class="btn-study mt-2" onclick="openSubjectList('${b}')">Study Now</button></div>`;
+            });
+        }
+
+        function openSubjectList(b) {
+            currentBatch = b;
+            showPage('subjectPage');
+            const cont = document.getElementById('subList');
+            cont.innerHTML = '';
+            [...new Set(appData.filter(x => x.b === b).map(x => x.s))].forEach(s => {
+                cont.innerHTML += `<div class="p-3 mb-2 rounded bg-secondary" onclick="openContent('${b}','${s}')">${s}</div>`;
+            });
+        }
+
+        function openContent(b, s) {
+            currentBatch = b; currentSub = s;
+            showPage('lecturePage');
+            document.getElementById('lectureTitle').innerText = s;
+            switchTab('video', document.querySelector('.tab-item'));
+        }
+
+        function switchTab(type, el) {
+            currentTab = type;
+            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            
+            const cont = document.getElementById('contentList');
+            cont.innerHTML = '';
+            
+            const filtered = appData.filter(x => x.b === currentBatch && x.s === currentSub && x.type === type);
+            
+            if(filtered.length === 0) {
+                cont.innerHTML = `<div class="text-center mt-5 text-secondary">No ${type} available</div>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                let icon = type === 'video' ? 'fa-play' : 'fa-file-pdf';
+                let action = type === 'video' ? `playVid('${item.u}')` : `window.open('${item.u}','_blank')`;
+                
+                cont.innerHTML += `
+                <div class="item-card" onclick="${action}">
+                    <div class="thumb-box"><i class="fas ${icon} fa-lg"></i></div>
+                    <div>
+                        <div style="font-size:14px; font-weight:500;">${item.t}</div>
+                        <small class="text-secondary">Click to Open</small>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function playVid(u) {
+            showPage('videoPlayerPage');
+            const area = document.getElementById('playerArea');
+            document.documentElement.requestFullscreen().catch(e => {});
+            if(u.includes('.m3u8')) {
+                area.innerHTML = `<video id="v" class="video-full" controls autoplay playsinline></video>`;
+                const hls = new Hls(); hls.loadSource(u); hls.attachMedia(document.getElementById('v'));
+            } else {
+                area.innerHTML = `<iframe src="https://www.youtube.com/embed/${u}?autoplay=1" class="video-full" allowfullscreen></iframe>`;
+            }
+        }
+
+        function closeVideo() {
+            if(document.fullscreenElement) document.exitFullscreen();
+            document.getElementById('playerArea').innerHTML = '';
+            showPage('lecturePage');
+        }
+
+        renderBatches();
+    </script>
+</body>
+</html>
